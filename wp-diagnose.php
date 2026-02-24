@@ -801,6 +801,63 @@ $htaccess_path = $wp_root . '/.htaccess';
 $s10[] = row('.htaccess', file_exists($htaccess_path) ? 'Ada' : 'Tidak ditemukan',
     file_exists($htaccess_path) ? 'ok' : 'warning');
 
+// index.php (root)
+$index_path = $wp_root . '/index.php';
+if (file_exists($index_path)) {
+    $index_perms     = substr(sprintf('%o', fileperms($index_path)), -4);
+    $index_perm_int  = octdec($index_perms);
+    $index_perm_ok   = ($index_perm_int <= octdec('0644'));
+    $s10[] = row('index.php (root)', 'Ada — permission: ' . $index_perms,
+        $index_perm_ok ? 'ok' : 'warning',
+        !$index_perm_ok ? 'Permission terlalu longgar, disarankan 644' : '');
+
+    // Cek isi index.php — deteksi injeksi/malware sederhana
+    $index_content = @file_get_contents($index_path);
+    if ($index_content !== false) {
+        $index_size = strlen($index_content);
+        // WordPress default index.php sangat kecil (~20 baris)
+        $suspicious_patterns = [
+            'eval(base64_decode'  => 'eval+base64_decode (indikasi malware)',
+            'eval(gzinflate'      => 'eval+gzinflate (indikasi malware)',
+            'eval(str_rot13'      => 'eval+str_rot13 (indikasi malware)',
+            'base64_decode(str_replace' => 'base64_decode obfuscation',
+            '$_POST[' => 'Akses $_POST langsung di index.php',
+            '$_GET['  => 'Akses $_GET langsung di index.php',
+            'preg_replace.*\/e'   => 'preg_replace /e modifier (code execution)',
+        ];
+        $found_suspicious = [];
+        foreach ($suspicious_patterns as $pattern => $desc) {
+            if (stripos($index_content, $pattern) !== false) {
+                $found_suspicious[] = $desc;
+            }
+        }
+        if (!empty($found_suspicious)) {
+            $s10[] = row('index.php — Konten', 'Mencurigakan: ' . implode('; ', $found_suspicious), 'error',
+                'Periksa isi index.php — kemungkinan injeksi malware!');
+        } elseif ($index_size > 5000) {
+            $s10[] = row('index.php — Ukuran', format_bytes($index_size) . ' (tidak normal)', 'warning',
+                'index.php WordPress standar sangat kecil (~20 baris). Periksa isinya.');
+        } else {
+            $s10[] = row('index.php — Konten', 'Normal (' . format_bytes($index_size) . ')', 'ok');
+        }
+    }
+} else {
+    $s10[] = row('index.php (root)', 'Tidak ditemukan!', 'error',
+        'File index.php WordPress harus ada di root. Kemungkinan terhapus atau salah direktori.');
+}
+
+// index.php di wp-content/ (WordPress "silence is golden" file)
+$wpcontent_index = $wp_root . '/wp-content/index.php';
+$s10[] = row('wp-content/index.php', file_exists($wpcontent_index) ? 'Ada' : 'Tidak ada',
+    file_exists($wpcontent_index) ? 'ok' : 'warning',
+    !file_exists($wpcontent_index) ? 'File ini mencegah directory listing di wp-content/' : '');
+
+// index.php di wp-includes/ (WordPress "silence is golden" file)
+$wpincludes_index = $wp_root . '/wp-includes/index.php';
+$s10[] = row('wp-includes/index.php', file_exists($wpincludes_index) ? 'Ada' : 'Tidak ada',
+    file_exists($wpincludes_index) ? 'ok' : 'warning',
+    !file_exists($wpincludes_index) ? 'File ini mencegah directory listing di wp-includes/' : '');
+
 // xmlrpc.php
 $xmlrpc_path = $wp_root . '/xmlrpc.php';
 $s10[] = row('xmlrpc.php', file_exists($xmlrpc_path) ? 'Ada' : 'Tidak ada',
