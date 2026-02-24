@@ -85,3 +85,4 @@ export async function GET() {
 | Date | Changes |
 |------|---------|
 | Initial | Template created with base setup |
+| 2026-02-24 | Fixed HTTP 500 error by removing `next/font/google` (Geist fonts) from layout.tsx — sandbox has no internet access for font fetching |
